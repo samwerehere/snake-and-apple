@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Snake</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Silkscreen&family=Pixelify+Sans&family=VT323&display=swap');
+
+#startScreen {
+    position: absolute;
+    inset: 0;
+    background: #ba01db;
+    border-radius: 12px;
+    border: solid;
+    border-color:#89c413;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body {
+    margin: 0;
+    background: #000000;
+    color: #fff;
+    font-family: sans-serif;
+    text-align: center;
+    touch-action: none;
+    user-select: none;
+}
+
+#title {
+    max-width: 80%;
+    height: 60px;
+    margin-top: 10px;
+}
+
+#titleText {
+    font-family: 'Silkscreen', sans-serif;
+    font-size: 50px;
+    color: rgb(2, 252, 2);
+    -webkit-text-stroke: 1px #aa09b9;
+    margin: 14px 0 4px;
+}
+
+#scores {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    font-family: 'Pixelify Sans', sans-serif;
+    font-size: 22px;
+    margin: 8px 0;
+}
+
+canvas {
+    width: 100%;
+    box-sizing: border-box;
+    background-color: #30c828;
+    border: 6px solid #ba01db;
+    border-radius: 12px;
+    display: block;
+}
+#over {
+    position: absolute;
+    inset: 0;
+    background: #ba01db;
+    border: solid, 5px;
+    border-color:#89c413;
+    border-radius: 12px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#over h2 {
+    font-family: 'Pixelify Sans', sans-serif;
+    font-size: 44px;
+    color: black;
+    margin: 0 0 16px;
+}
+
+#wrap {
+    position: relative;
+    width: min(92vw, 420px);
+    margin: 0 auto;
+}
+
+canvas {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#startScreen,#over {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+button {
+    font-family: 'Pixelify Sans', sans-serif;
+    font-size: 24px;
+    padding: 10px 24px;
+    border: 4px solid #000000;
+    border-radius: 0;
+    background: #30c828;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 
+        4px 4px 0 #000,
+        8px 8px 0 rgba(0,0,0,0.25);
+}
+</style>
+</head>
+<body>
+
+<img id="title" src="title.png" alt="" style="display:none">
+<h1 id="titleText">SNAKE</h1>
+
+<div id="scores">
+  <div>Score: <span id="score">0</span></div>
+  <div>High score: <span id="high">0</span></div>
+</div>
+
+<div id="wrap">
+  <div id="startScreen">
+    <button id="play">PLAY</button>
+  </div>  
+  <canvas id="c" width="400" height="400"></canvas>
+  <div id="over">
+    <h2>GAME OVER</h2>
+    <button id="replay">REPLAY</button>
+  </div>
+</div>
+
+
+
+<script>
+// ====== YOUR DESIGNS: put your image files next to this file ======
+const SNAKE_IMG = "snake.png";   // one square piece of the snake (body)
+const APPLE_IMG = "apple.png";   // the apple
+const TITLE_IMG = "title.png";   // the title banner
+const HEAD_IMG = "head.png";   // draw it facing RIGHT
+const TAIL_IMG = "tail.png";
+const tailImg = loadImg(TAIL_IMG);
+const headImg = loadImg(HEAD_IMG);
+const BEND_IMG = "bend.png";
+const bendImg = loadImg(BEND_IMG);
+// If an image isn't found, simple shapes are drawn instead.
+// ==================================================================
+
+const GRID = 12, SIZE = 400 / GRID;   // 20x20 board
+const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+
+
+function loadImg(src) {
+  const img = new Image();
+  img.onload = () => img.ok = true;
+  img.src = src;
+  return img;
+}
+const snakeImg = loadImg(SNAKE_IMG), appleImg = loadImg(APPLE_IMG);
+const titleEl = document.getElementById('title');
+titleEl.src = TITLE_IMG;
+titleEl.onload = () => { titleEl.style.display = 'inline'; document.getElementById('titleText').style.display = 'none'; };
+
+let snake, dir, nextDir, apple, score, high, loop;
+high = +localStorage.getItem('snakeHigh') || 0;
+document.getElementById('high').textContent = high;
+
+function start() {
+  const mid = Math.floor(GRID / 2);
+  snake = [{x: 2, y: mid}, {x: 1, y: mid}, {x: 0, y: mid}];
+  dir = nextDir = {x: 1, y: 0};
+  score = 0;
+  document.getElementById('score').textContent = 0;
+  document.getElementById('over').style.display = 'none';
+  placeApple();
+  clearInterval(loop);
+  loop = setInterval(tick, 200);   // lower number = faster snake
+}
+
+function placeApple() {
+  do {
+    apple = {x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID)};
+  } while (snake.some(s => s.x === apple.x && s.y === apple.y));
+}
+
+function tick() {
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+  // hit wall or yourself = lose
+  if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID ||
+      snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
+
+  snake.unshift(head);
+  if (head.x === apple.x && head.y === apple.y) {
+    score++;
+    document.getElementById('score').textContent = score;
+    if (score > high) {
+      high = score;
+      localStorage.setItem('snakeHigh', high);
+      document.getElementById('high').textContent = high;
+    }
+    placeApple();
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+function drawPart(img, s, angle, fallback, flip) {
+  ctx.save();
+  ctx.translate(s.x * SIZE + SIZE / 2, s.y * SIZE + SIZE / 2);
+  ctx.rotate(angle);
+  if (flip) ctx.scale(1, -1);
+  if (img.ok) ctx.drawImage(img, -SIZE / 2, -SIZE / 2, SIZE, SIZE);
+  else { ctx.fillStyle = fallback; ctx.fillRect(-SIZE / 2 + 1, -SIZE / 2 + 1, SIZE - 2, SIZE - 2); }
+  ctx.restore();
+}
+function draw() {
+  ctx.clearRect(0, 0, 400, 400);
+    // checkerboard
+  for (let x = 0; x < GRID; x++) {
+    for (let y = 0; y < GRID; y++) {
+      ctx.fillStyle = (x + y) % 2 ? '#279f22' : '#30c828';
+      ctx.fillRect(x * SIZE, y * SIZE, SIZE, SIZE);
+    }
+  }
+  // apple
+  if (appleImg.ok) ctx.drawImage(appleImg, apple.x * SIZE, apple.y * SIZE, SIZE, SIZE);
+  else { ctx.fillStyle = '#e63946'; ctx.beginPath();
+         ctx.arc(apple.x * SIZE + SIZE/2, apple.y * SIZE + SIZE/2, SIZE/2 - 2, 0, 7); ctx.fill(); }
+
+  // snake
+   // snake
+  snake.forEach((s, i) => {
+    if (i === 0) return drawPart(headImg, s, Math.atan2(dir.y, dir.x), '#a8dadc',dir.x < 0);
+
+    const ahead = snake[i - 1];
+    const out = { x: ahead.x - s.x, y: ahead.y - s.y };       // direction toward the head
+    if (i === snake.length - 1) return drawPart(tailImg, s, Math.atan2(out.y, out.x), '#2d6a4f',out.x < 0);
+
+    const behind = snake[i + 1];
+    const inn = { x: s.x - behind.x, y: s.y - behind.y };     // direction it arrived from
+    const turning = inn.x !== out.x || inn.y !== out.y;
+
+    if (turning && bendImg.ok) {
+      const flip = inn.x * out.y - inn.y * out.x < 0;         // turns the other way
+      return drawPart(bendImg, s, Math.atan2(inn.y, inn.x), '#52b788', flip);
+    }
+    drawPart(snakeImg, s, Math.atan2(out.y, out.x), '#52b788',out.x < 0);
+  });
+}
+
+let ac;
+function unlockAudio() {
+  ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === 'suspended') ac.resume();
+}
+
+function playLoseSound() {
+  const osc = ac.createOscillator(), gain = ac.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(400, ac.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(60, ac.currentTime + 0.6);
+  gain.gain.setValueAtTime(0.3, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.6);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(); osc.stop(ac.currentTime + 0.6);
+}
+
+function gameOver() {
+  clearInterval(loop);
+  playLoseSound();
+  document.getElementById('over').style.display = 'flex';
+}
+
+// ---- turning (can't reverse straight into yourself) ----
+function turn(d) {
+  const v = {up: {x:0,y:-1}, down: {x:0,y:1}, left: {x:-1,y:0}, right: {x:1,y:0}}[d];
+  if (v.x !== -dir.x || v.y !== -dir.y) nextDir = v;
+}
+
+// keyboard (laptop)
+addEventListener('keydown', e => {
+
+  // Play button: Enter or Space
+  if (document.getElementById('startScreen').style.display !== 'none') {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      document.getElementById('play').click();
+    }
+    return;
+  }
+
+  // Replay button: Enter or Space after game over
+  if (document.getElementById('over').style.display === 'flex') {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      document.getElementById('replay').click();
+    }
+    return;
+  }
+
+  // Snake movement
+  const k = {
+    ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right',
+    w:'up', s:'down', a:'left', d:'right'
+  }[e.key];
+
+  if (k) {
+    e.preventDefault();
+    turn(k);
+  }
+});
+
+// swipe on the board (mobile)
+let sx, sy;
+document.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; });
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+  turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+});
+
+document.getElementById('replay').onclick = () => { unlockAudio(); start(); };
+document.getElementById('play').onclick = () => {
+  unlockAudio();
+  document.getElementById('startScreen').style.display = 'none';
+  start();
+};
+
+</script>
+</body>
+</html>
